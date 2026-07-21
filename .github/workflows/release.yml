@@ -31,9 +31,13 @@ jobs:
         include:
           - rid: win-x64
             archive: zip
+          - rid: win-arm64
+            archive: zip
           - rid: osx-x64
             archive: tar.gz
           - rid: osx-arm64
+            archive: tar.gz
+          - rid: linux-x64
             archive: tar.gz
 
     steps:
@@ -77,7 +81,7 @@ jobs:
           staging="staging/${rid}"
           mkdir -p "$staging"
 
-          if [ "$rid" = "win-x64" ]; then
+          if [ "${{ matrix.archive }}" = "zip" ]; then
             cp "publish/${rid}/IpAddressMcp.Server.exe" "$staging/ip-address-mcp.exe"
           else
             cp "publish/${rid}/IpAddressMcp.Server" "$staging/ip-address-mcp"
