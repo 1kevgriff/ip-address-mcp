@@ -11,6 +11,20 @@ A local, cross-platform MCP server built with .NET 10 and the official MCP C# SD
 - An MCP client that supports stdio servers
 - Internet access for public-address lookups
 
+## Prebuilt binaries
+
+Tagged releases (`v*`) publish self-contained, single-file executables for
+Windows (`win-x64`) and macOS (`osx-x64`, `osx-arm64`) via the `Release` GitHub
+Action. These require no .NET SDK or runtime on the target machine — download the
+archive for your platform from the Releases page and run the executable directly.
+
+The macOS binaries are unsigned, so Gatekeeper quarantines them on first run.
+Clear the quarantine attribute before launching:
+
+```bash
+xattr -d com.apple.quarantine ./ip-address-mcp
+```
+
 ## Build and test
 
 ```powershell
@@ -37,7 +51,7 @@ Build the server, then configure your client to launch the resulting DLL. Replac
     "ip-address": {
       "command": "dotnet",
       "args": [
-        "K:\\MCP\\ip-address-mcp\\src\\IpAddressMcp.Server\\bin\\Release\\net10.0\\IpAddressMcp.Server.dll"
+        "<absolute-path-to-repo>\\src\\IpAddressMcp.Server\\bin\\Release\\net10.0\\IpAddressMcp.Server.dll"
       ]
     }
   }

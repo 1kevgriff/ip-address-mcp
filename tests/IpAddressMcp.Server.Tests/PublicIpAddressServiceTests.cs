@@ -43,6 +43,59 @@ public sealed class PublicIpAddressServiceTests
         Assert.DoesNotContain("sensitive", result.Ipv6.Message);
     }
 
+    [Fact]
+    public async Task GetPublicIpAddressesAsync_ReturnsPartialResultWhenIpv4IsUnavailable()
+    {
+        using var client = CreateClient((request, _) =>
+            request.RequestUri!.Host == "ipv6.test"
+                ? Task.FromResult(TextResponse("2001:db8::5"))
+                : Task.FromException<HttpResponseMessage>(new HttpRequestException("sensitive")));
+        var service = CreateService(client);
+
+        var result = await service.GetPublicIpAddressesAsync(CancellationToken.None);
+
+        Assert.Equal("available", result.Ipv6.Status);
+        Assert.Equal("2001:db8::5", result.Ipv6.Address);
+        Assert.Equal("unavailable", result.Ipv4.Status);
+        Assert.Null(result.Ipv4.Address);
+        Assert.Equal("The IPv4 provider could not be reached.", result.Ipv4.Message);
+        Assert.DoesNotContain("sensitive", result.Ipv4.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetPublicIpAddressesAsync_RejectsEmptyResponses(string ipv6Response)
+    {
+        using var client = CreateClient((request, _) => Task.FromResult(
+            TextResponse(request.RequestUri!.Host == "ipv4.test"
+                ? "192.0.2.10"
+                : ipv6Response)));
+        var service = CreateService(client);
+
+        var result = await service.GetPublicIpAddressesAsync(CancellationToken.None);
+
+        Assert.Equal("available", result.Ipv4.Status);
+        Assert.Equal("unavailable", result.Ipv6.Status);
+        Assert.Equal("The IPv6 provider returned an invalid IP address.", result.Ipv6.Message);
+    }
+
+    [Fact]
+    public async Task GetPublicIpAddressesAsync_RejectsOverlyLongResponses()
+    {
+        var oversized = new string('9', 129);
+        using var client = CreateClient((request, _) => Task.FromResult(
+            TextResponse(request.RequestUri!.Host == "ipv4.test"
+                ? "192.0.2.10"
+                : oversized)));
+        var service = CreateService(client);
+
+        var result = await service.GetPublicIpAddressesAsync(CancellationToken.None);
+
+        Assert.Equal("available", result.Ipv4.Status);
+        Assert.Equal("The IPv6 provider returned an invalid IP address.", result.Ipv6.Message);
+    }
+
     [Theory]
     [InlineData("not-an-address")]
     [InlineData("192.0.2.12")]
@@ -77,6 +130,24 @@ public sealed class PublicIpAddressServiceTests
 
         Assert.Equal("The IPv6 provider returned HTTP status 503.", result.Ipv6.Message);
         Assert.DoesNotContain("provider internals", result.Ipv6.Message);
+    }
+
+    [Fact]
+    public async Task GetPublicIpAddressesAsync_SanitizesUnexpectedProviderFailures()
+    {
+        using var client = CreateClient((request, _) =>
+            request.RequestUri!.Host == "ipv4.test"
+                ? Task.FromResult(TextResponse("203.0.113.40"))
+                : Task.FromException<HttpResponseMessage>(
+                    new InvalidOperationException("secret internal detail")));
+        var service = CreateService(client);
+
+        var result = await service.GetPublicIpAddressesAsync(CancellationToken.None);
+
+        Assert.Equal("available", result.Ipv4.Status);
+        Assert.Equal("unavailable", result.Ipv6.Status);
+        Assert.Equal("The IPv6 lookup failed.", result.Ipv6.Message);
+        Assert.DoesNotContain("secret internal detail", result.Ipv6.Message);
     }
 
     [Fact]

@@ -83,6 +83,28 @@ public sealed class LocalIpAddressServiceTests
             result.Addresses.Select(address => address.Address));
     }
 
+    [Fact]
+    public void GetLocalIpAddresses_SortsAddressesNumericallyNotLexically()
+    {
+        var provider = new StubNetworkInterfaceProvider(
+        [
+            Snapshot(
+                "eth",
+                "Ethernet",
+                NetworkInterfaceType.Ethernet,
+                OperationalStatus.Up,
+                IPAddress.Parse("192.168.1.100"),
+                IPAddress.Parse("192.168.1.9"),
+                IPAddress.Parse("192.168.1.99")),
+        ]);
+
+        var result = new LocalIpAddressService(provider).GetLocalIpAddresses();
+
+        Assert.Equal(
+            ["192.168.1.9", "192.168.1.99", "192.168.1.100"],
+            result.Addresses.Select(address => address.Address));
+    }
+
     private static NetworkInterfaceSnapshot Snapshot(
         string id,
         string name,
