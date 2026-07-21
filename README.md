@@ -37,7 +37,7 @@ Build the server, then configure your client to launch the resulting DLL. Replac
     "ip-address": {
       "command": "dotnet",
       "args": [
-        "K:\\MCP\\ip-address-mcp\\src\\IpAddressMcp.Server\\bin\\Release\\net10.0\\IpAddressMcp.Server.dll"
+        "<absolute-path-to-repo>\\src\\IpAddressMcp.Server\\bin\\Release\\net10.0\\IpAddressMcp.Server.dll"
       ]
     }
   }

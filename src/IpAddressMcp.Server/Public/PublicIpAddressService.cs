@@ -70,6 +70,10 @@ public sealed class PublicIpAddressService(
                 .ReadAsStringAsync(cancellationToken)
                 .ConfigureAwait(false)).Trim();
 
+            // The transport-level MaxResponseContentBufferSize is the primary
+            // defense against oversized bodies (it faults ReadAsStringAsync as an
+            // HttpRequestException); this bound rejects any smaller but still
+            // implausible payload before we attempt to parse it as an address.
             if (value.Length is 0 or > 128 ||
                 !IPAddress.TryParse(value, out var address) ||
                 address.AddressFamily != expectedFamily)
@@ -80,7 +84,12 @@ public sealed class PublicIpAddressService(
 
             return PublicAddressLookupResult.Available(address.ToString());
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The caller asked to cancel; propagate rather than masking it as a lookup failure.
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             return PublicAddressLookupResult.Unavailable(
                 $"The {familyName} lookup timed out.");
@@ -89,6 +98,13 @@ public sealed class PublicIpAddressService(
         {
             return PublicAddressLookupResult.Unavailable(
                 $"The {familyName} provider could not be reached.");
+        }
+        catch (Exception)
+        {
+            // Defense in depth: any other provider/transport failure must not surface
+            // raw exception details to the MCP client.
+            return PublicAddressLookupResult.Unavailable(
+                $"The {familyName} lookup failed.");
         }
     }
 }

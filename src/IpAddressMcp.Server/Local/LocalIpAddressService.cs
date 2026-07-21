@@ -30,7 +30,7 @@ public sealed class LocalIpAddressService(INetworkInterfaceProvider networkInter
             .Select(candidate => ToEntry(candidate.NetworkInterface, candidate.Address))
             .OrderBy(entry => entry.AddressFamily == "IPv4" ? 0 : 1)
             .ThenBy(entry => entry.InterfaceName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(entry => entry.Address, StringComparer.Ordinal)
+            .ThenBy(entry => entry.Address, NumericAddressComparer.Instance)
             .ThenBy(entry => entry.ScopeId)
             .ToArray();
 
@@ -61,5 +61,40 @@ public sealed class LocalIpAddressService(INetworkInterfaceProvider networkInter
             networkInterface.Name,
             networkInterface.InterfaceType.ToString(),
             scopeId);
+    }
+}
+
+// Orders addresses by their numeric value (byte order) rather than lexically, so
+// 192.168.1.99 sorts before 192.168.1.100. Inputs are always valid, scope-stripped
+// IP strings produced by ToEntry.
+internal sealed class NumericAddressComparer : IComparer<string>
+{
+    public static readonly NumericAddressComparer Instance = new();
+
+    public int Compare(string? x, string? y)
+    {
+        if (ReferenceEquals(x, y))
+        {
+            return 0;
+        }
+
+        if (x is null)
+        {
+            return -1;
+        }
+
+        if (y is null)
+        {
+            return 1;
+        }
+
+        var left = IPAddress.Parse(x).GetAddressBytes();
+        var right = IPAddress.Parse(y).GetAddressBytes();
+
+        // Shorter address families (IPv4) sort before longer ones (IPv6); within a
+        // family the byte lengths are equal and the comparison is purely numeric.
+        return left.Length != right.Length
+            ? left.Length.CompareTo(right.Length)
+            : left.AsSpan().SequenceCompareTo(right);
     }
 }
