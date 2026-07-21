@@ -1,0 +1,110 @@
+name: Release
+
+# Builds self-contained, single-file executables (no .NET SDK/runtime required on
+# the target machine) for Windows and macOS and attaches them to a GitHub Release.
+#
+# Trigger by pushing a version tag, e.g.:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Or run manually from the Actions tab (workflow_dispatch) to produce downloadable
+# artifacts without publishing a Release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into the build (e.g. 1.0.0)"
+        required: false
+        default: "0.0.0"
+
+permissions:
+  contents: write # required to create/update the Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # .NET cross-compiles single-file binaries for every target RID
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            archive: zip
+          - rid: osx-x64
+            archive: tar.gz
+          - rid: osx-arm64
+            archive: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish ${{ matrix.rid }}
+        run: |
+          dotnet publish src/IpAddressMcp.Server/IpAddressMcp.Server.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none \
+            -p:Version=${{ steps.version.outputs.value }} \
+            -o "publish/${{ matrix.rid }}"
+          # NOTE: intentionally NOT trimming (PublishTrimmed) — the MCP server
+          # discovers tools via reflection (WithToolsFromAssembly), which trimming
+          # can silently break.
+
+      - name: Package ${{ matrix.rid }}
+        id: package
+        run: |
+          version="${{ steps.version.outputs.value }}"
+          rid="${{ matrix.rid }}"
+          staging="staging/${rid}"
+          mkdir -p "$staging"
+
+          if [ "$rid" = "win-x64" ]; then
+            cp "publish/${rid}/IpAddressMcp.Server.exe" "$staging/ip-address-mcp.exe"
+          else
+            cp "publish/${rid}/IpAddressMcp.Server" "$staging/ip-address-mcp"
+            chmod +x "$staging/ip-address-mcp"
+          fi
+          cp README.md "$staging/"
+
+          name="ip-address-mcp-${version}-${rid}"
+          mkdir -p dist
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd "$staging" && zip -r "../../dist/${name}.zip" .)
+            echo "asset=dist/${name}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "dist/${name}.tar.gz" -C "$staging" .
+            echo "asset=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ip-address-mcp-${{ matrix.rid }}
+          path: ${{ steps.package.outputs.asset }}
+          if-no-files-found: error
+
+      - name: Attach to Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.asset }}
+          fail_on_unmatched_files: true
