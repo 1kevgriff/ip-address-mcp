@@ -16,7 +16,9 @@ A local, cross-platform MCP server built with .NET 10 and the official MCP C# SD
 Tagged releases (`v*`) publish self-contained, single-file executables for
 Windows (`win-x64`) and macOS (`osx-x64`, `osx-arm64`) via the `Release` GitHub
 Action. These require no .NET SDK or runtime on the target machine — download the
-archive for your platform from the Releases page and run the executable directly.
+archive for your platform from the
+[Releases page](https://github.com/1kevgriff/ip-address-mcp/releases/latest) and
+run the executable directly.
 
 The macOS binaries are unsigned, so Gatekeeper quarantines them on first run.
 Clear the quarantine attribute before launching:
@@ -43,7 +45,30 @@ The process waits for MCP JSON-RPC messages on standard input. Standard output i
 
 ## MCP client configuration
 
-Build the server, then configure your client to launch the resulting DLL. Replace the path below with the absolute path on your machine.
+### Using a prebuilt release (recommended)
+
+Download the archive for your platform from the
+[Releases page](https://github.com/1kevgriff/ip-address-mcp/releases/latest),
+extract it, and point your client at the executable. No .NET SDK or runtime is
+required. On macOS, clear the quarantine attribute first (see
+[Prebuilt binaries](#prebuilt-binaries)).
+
+```json
+{
+  "mcpServers": {
+    "ip-address": {
+      "command": "<absolute-path-to>\\ip-address-mcp.exe"
+    }
+  }
+}
+```
+
+On macOS and Linux the command is the extracted `ip-address-mcp` binary.
+
+### Building from source
+
+Alternatively, build the server and launch the resulting DLL with `dotnet`.
+Replace the path below with the absolute path on your machine.
 
 ```json
 {
